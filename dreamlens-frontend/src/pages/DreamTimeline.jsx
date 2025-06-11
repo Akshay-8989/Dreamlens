@@ -1,133 +1,82 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import DreamCard from "../components/DreamCard";
-import { getDreams, enhanceDream } from "../api/axios";
+// src/pages/DreamTimeline.jsx
+
+import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import DreamCard from '../components/DreamCard';
 
 export default function DreamTimeline() {
-  const [dreams, setDreams] = useState([]); // Initialize as an empty array
+  const [dreams, setDreams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [enhancedDreamId, setEnhancedDreamId] = useState(null);
-  const [enhancedText, setEnhancedText] = useState("");
-  const [enhancingLoading, setEnhancingLoading] = useState(false);
-  const [enhanceError, setEnhanceError] = useState(null);
-
-  useEffect(() => {
-    fetchDreams();
-  }, []);
-
-  const fetchDreams = async () => {
+  // Use useCallback to memoize the fetchDreams function
+  const fetchDreams = useCallback(async () => {
     try {
       setLoading(true);
-      // Removed console.logs added in the last step for brevity in final code,
-      // but keep them if you need more debugging.
-      const res = await getDreams(); // 'res' itself should now be the array of dreams
-
-      // FIX: Check if 'res' is an array, not 'res.data'
-      if (Array.isArray(res)) {
-        setDreams(res); // Set dreams directly to 'res'
-      } else {
-        // Log a warning if the data isn't an array but not an error
-        console.warn("API returned non-array data for dreams:", res); // 'res' is the actual data here
-        setDreams([]); // Default to empty array to prevent crash
+      const response = await fetch('http://localhost:8000/dreams'); // Ensure this URL is correct for your backend
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      setError(null);
-    } catch (err) {
-      console.error("Error fetching dreams:", err);
-      setError("Failed to load dreams. Please try again.");
-      setDreams([]); // Ensure dreams is an empty array on error too
+      const data = await response.json();
+      // Sort dreams by date, newest first, for the timeline
+      const sortedDreams = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setDreams(sortedDreams);
+    } catch (e) {
+      setError(e.message);
+      console.error("Error fetching dreams:", e);
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // Empty dependency array means this function reference won't change unless dependencies change
 
-  const handleEnhanceDream = async (dreamId) => {
-    setEnhancedDreamId(dreamId);
-    setEnhancingLoading(true);
-    setEnhancedText("");
-    setEnhanceError(null);
+  useEffect(() => {
+    fetchDreams();
+  }, [fetchDreams]); // Depend on fetchDreams to re-run effect if it changes (due to useCallback, it won't)
 
-    try {
-      const enhancedData = await enhanceDream(dreamId);
-      setEnhancedText(enhancedData.excerpt);
-    } catch (err) {
-      console.error("Error enhancing dream:", err);
-      setEnhanceError("Could not enhance dream. Please try again.");
-      setEnhancedText("");
-    } finally {
-      setEnhancingLoading(false);
-    }
-  };
 
-  const closeEnhancedView = () => {
-    setEnhancedDreamId(null);
-    setEnhancedText("");
-    setEnhanceError(null);
-  };
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-blue-300 text-xl">Loading dreams...</div>;
+  }
+
+  if (error) {
+    return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400 text-xl">Error: {error}</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white to-indigo-100 p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Dream Timeline</h1>
-          <Link to="/" className="text-indigo-600 hover:underline">
-            + Log New
-          </Link>
-        </div>
+    <div className="bg-gray-900 min-h-screen py-8 text-white">
+      <div className="container mx-auto px-4">
+        <h2 className="text-4xl font-extrabold text-blue-300 text-center mb-12 tracking-wide">
+          Your Dream Journey Timeline
+        </h2>
 
-        {loading ? (
-          <p className="text-gray-500">Loading dreams...</p>
-        ) : error ? (
-          <p className="text-red-500">{error}</p>
-        ) : dreams.length > 0 ? ( // This line is now safe because 'dreams' will always be an array
-          dreams.map((dream) => (
-            <div
-              key={dream.id}
-              className="bg-white rounded-lg shadow-md p-6 mb-4"
-            >
-              <DreamCard dream={dream} />
-              <div className="mt-4 flex items-center space-x-2">
-                <button
-                  onClick={() => handleEnhanceDream(dream.id)}
-                  className={`px-4 py-2 rounded-md text-white font-medium transition-colors duration-200
-                              ${
-                                enhancingLoading && enhancedDreamId === dream.id
-                                  ? "bg-gray-400 cursor-not-allowed"
-                                  : "bg-purple-600 hover:bg-purple-700"
-                              }`}
-                  disabled={enhancingLoading && enhancedDreamId === dream.id}
-                >
-                  {enhancingLoading && enhancedDreamId === dream.id
-                    ? "Enhancing..."
-                    : "Enhance Dream"}
-                </button>
+        {dreams.length > 0 ? (
+          <div className="relative">
+            {/* Vertical timeline line */}
+            <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-gradient-to-b from-blue-500 to-pink-500 -ml-px"></div>
 
-                {enhancedDreamId === dream.id && (enhancingLoading || enhancedText || enhanceError) && (
-                  <div className="flex-1 p-3 bg-indigo-50 rounded-md ml-4 border border-indigo-200">
-                    {enhancingLoading && enhancedDreamId === dream.id ? (
-                      <p className="text-indigo-700">Enhancing dream...</p>
-                    ) : enhanceError ? (
-                      <p className="text-red-500">{enhanceError}</p>
-                    ) : (
-                      <>
-                        <h3 className="font-semibold text-indigo-800 mb-2">Enhanced Dream:</h3>
-                        <p className="text-indigo-900">{enhancedText}</p>
-                        <button
-                          onClick={closeEnhancedView}
-                          className="mt-2 text-sm text-indigo-600 hover:underline"
-                        >
-                          Close Enhanced View
-                        </button>
-                      </>
-                    )}
+            {dreams.map((dream, index) => (
+              <div
+                key={dream.id}
+                className={`mb-12 flex items-center w-full ${index % 2 === 0 ? 'flex-row-reverse justify-end' : 'justify-start'}`}
+              >
+                {/* Dream Card - Pass the onEnhanceSuccess callback */}
+                <div className="w-11/12 md:w-5/12">
+                   <DreamCard dream={dream} onEnhanceSuccess={fetchDreams} /> {/* Pass fetchDreams as callback */}
+                </div>
+
+                {/* Timeline Node (The circular marker) */}
+                <div className="w-1/12 flex justify-center z-10">
+                  <div className="w-6 h-6 rounded-full bg-blue-500 border-2 border-blue-300 flex items-center justify-center">
+                    <span className="text-white text-xs font-bold"></span> {/* Could put day number here, or an icon */}
                   </div>
-                )}
+                </div>
+
+                {/* Placeholder to balance the flex item on the other side */}
+                <div className="w-11/12 md:w-5/12"></div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         ) : (
-          <p className="text-gray-600">No dreams logged yet. Start dreaming!</p>
+          <p className="text-center text-gray-400 text-xl mt-20">No dreams logged yet. Start your journey!</p>
         )}
       </div>
     </div>

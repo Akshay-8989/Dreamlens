@@ -1,123 +1,121 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+# app/main.py
+
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-import os # Import os for environment variables
-
-# Import the generative AI library
+from pydantic import BaseModel
 import google.generativeai as genai
+import os
+from typing import Optional, List # Import Optional and List
 
-from app import models, database, schemas
+# --- Database Setup Placeholder ---
+# You need to replace this with your actual database setup (e.g., SQLAlchemy, Pydantic with database support)
+# This is a MINIMAL example of how a Dream model might look.
+# If you're using SQLAlchemy, you'd have a database session dependency injected here.
 
-app = FastAPI(
-    title="DreamLens API",
-    description="Backend for capturing and analyzing dreams",
-    version="1.0.0"
-)
+# Mock Dream model for demonstration (replace with your actual ORM model)
+class Dream(BaseModel):
+    id: Optional[int] = None
+    title: Optional[str] = None
+    content: str
+    excerpt: Optional[str] = None
+    symbols: Optional[List[str]] = []
+    emotions: Optional[List[str]] = []
+    themes: Optional[List[str]] = []
+    created_at: Optional[str] = None # Or datetime object
+    enhanced_content: Optional[str] = None # <<< NEW FIELD FOR AI ENHANCEMENT
 
+# In-memory mock database (replace with your actual database operations)
+mock_db = {
+    11: Dream(id=11, title="Flying dream", content="I was flying over mountains, feeling free.", created_at="2023-01-15T10:00:00Z"),
+    12: Dream(id=12, title="Lost in a maze", content="I was lost in a dark maze, feeling anxious.", created_at="2023-01-16T11:00:00Z"),
+    # Add more mock dreams or connect to your actual DB
+}
+next_dream_id = 13 # For mock DB
+
+
+# --- FastAPI App Setup ---
+app = FastAPI()
+
+# CORS middleware to allow requests from your frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # Be specific, not "*"
+    allow_origins=["http://localhost:5173"],  # Allow your Vite development server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure Gemini API
-# Ensure GOOGLE_API_KEY environment variable is set
+# --- Gemini API Configuration ---
+# Ensure your GOOGLE_API_KEY environment variable is set before running uvicorn
+# Example: $env:GOOGLE_API_KEY="YOUR_API_KEY" (PowerShell) or export GOOGLE_API_KEY="YOUR_API_KEY" (Bash)
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-# Choose a model. gemini-pro was used, but it's now deprecated or regionally unavailable for direct use.
-# 'gemini-1.5-flash' is a fast and cost-effective option for many text tasks.
-# 'gemini-1.0-pro' is another robust option.
-# You can check available models via genai.list_models() if needed.
-gemini_model = genai.GenerativeModel('gemini-1.5-flash') # <-- CORRECTED MODEL NAME
+# Initialize the Gemini model with the correct name
+# This is the corrected line:
+gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Create DB tables
-models.Base.metadata.create_all(bind=database.engine)
+# --- Routes ---
 
-# Dependency
-def get_db():
-    db = database.SessionLocal()
+# Example endpoint for fetching dreams (similar to what you already have)
+@app.get("/dreams", response_model=List[Dream])
+async def read_dreams():
+    return list(mock_db.values())
+
+# Example endpoint for creating dreams (similar to what you already have)
+@app.post("/dreams", response_model=Dream)
+async def create_dream(dream: Dream):
+    global next_dream_id
+    dream.id = next_dream_id
+    dream.created_at = dream.created_at or "2024-01-01T00:00:00Z" # Default if not provided
+    dream.excerpt = dream.content[:100] + "..." if len(dream.content) > 100 else dream.content
+    mock_db[dream.id] = dream
+    next_dream_id += 1
+    return dream
+
+# --- NEW: AI Dream Enhancement Endpoint ---
+@app.post("/dreams/{dream_id}/enhance", response_model=dict) # Response model can be more specific
+async def enhance_dream(dream_id: int):
+    # 1. Fetch the dream from your database
+    # This is placeholder logic. Replace with your actual DB query.
+    dream_entry = mock_db.get(dream_id) # Using mock_db for example
+    if not dream_entry:
+        raise HTTPException(status_code=404, detail="Dream not found")
+
+    if dream_entry.enhanced_content:
+        # Optional: Return existing enhanced content if already present
+        return {"message": "Dream already enhanced", "enhanced_content": dream_entry.enhanced_content}
+
+
+    # 2. Prepare the prompt for the Gemini API
+    # Tailor this prompt to get the kind of analysis you want
+    prompt_text = f"""Re-imagine and beautifully enhance the following dream into a simple, positive, and magical story.
+    **Strictly build upon the core elements already present in the dream content.** Do not introduce entirely new, unrelated fantastical creatures or scenarios.
+    Expand upon the dream's events, suggesting wonderful things that could have happened or continued, making it feel joyful and memorable.
+    Use clear, understandable language, like telling a captivating dream story. Avoid overly complex or "buzz" words.
+    Describe the enhanced dream experience in a flowing, imaginative paragraph, ensuring the overall tone is uplifting and happy.
+    Keep the enhanced description concise but vivid, around 150-200 words.
+
+    Dream Title: {dream_entry.title or 'N/A'}
+    Dream Content: {dream_entry.content}
+    """
+
     try:
-        yield db
-    finally:
-        db.close()
+        # 3. Call the Gemini API
+        response = gemini_model.generate_content(prompt_text)
+        enhanced_content = response.text
 
-@app.post("/dreams", response_model=schemas.DreamOut)
-def create_dream(dream: schemas.DreamCreate, db: Session = Depends(get_db)):
-    db_dream = models.Dream(
-        excerpt=dream.excerpt,
-        symbols=",".join(dream.symbols),
-        emotions=",".join(dream.emotions)
-    )
-    db.add(db_dream)
-    db.commit()
-    db.refresh(db_dream)
-    return {
-        "id": db_dream.id,
-        "excerpt": db_dream.excerpt,
-        "symbols": db_dream.symbols.split(",") if db_dream.symbols else [],
-        "emotions": db_dream.emotions.split(",") if db_dream.emotions else [],
-        "created_at": db_dream.created_at
-    }
+        # 4. Save the enhanced content back to your database
+        # This is placeholder logic. Replace with your actual DB update.
+        dream_entry.enhanced_content = enhanced_content
+        mock_db[dream_id] = dream_entry # Update in mock_db
 
-@app.get("/dreams", response_model=list[schemas.DreamOut])
-def get_dreams(db: Session = Depends(get_db)):
-    dreams = db.query(models.Dream).all()
-    return [
-        {
-            "id": d.id,
-            "excerpt": d.excerpt,
-            "symbols": d.symbols.split(",") if d.symbols else [],
-            "emotions": d.emotions.split(",") if d.emotions else [],
-            "created_at": d.created_at
-        }
-        for d in dreams
-    ]
-
-# --- NEW ENDPOINT FOR DREAM ENHANCEMENT ---
-@app.post("/dreams/{dream_id}/enhance")
-async def enhance_dream(dream_id: int, db: Session = Depends(get_db)):
-    # 1. Fetch the original dream
-    db_dream = db.query(models.Dream).filter(models.Dream.id == dream_id).first()
-    if not db_dream:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dream not found")
-
-    original_dream_text = db_dream.excerpt
-
-    # 2. Craft a prompt for the LLM
-    prompt = (
-        f"You are a dream enhancement AI. Your goal is to take a user's dream "
-        f"excerpt and enhance it to be more vivid, pleasant, slightly magical, "
-        f"and rich in sensory details. Focus on positive imagery and gentle expansions. "
-        f"Do not drastically change the core events or add new plot points. "
-        f"Keep the enhanced version concise, around 100-150 words. "
-        f"If the dream is negative, gently steer it towards a more hopeful or serene tone without denying its original content. "
-        f"Original dream excerpt: '{original_dream_text}'"
-        f"\n\nEnhanced Dream:"
-    )
-
-    # 3. Call the LLM (Asynchronous call for better performance)
-    try:
-        response = await gemini_model.generate_content_async(
-            contents=[prompt],
-            generation_config=genai.GenerationConfig(
-                temperature=0.9, # Higher temperature for more creativity
-                max_output_tokens=200 # Roughly 150 words, gives some buffer
-            )
-        )
-        enhanced_text = response.text.strip() # Access the generated text
+        return {"message": "Dream enhanced successfully", "enhanced_content": enhanced_content}
 
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Failed to enhance dream: {str(e)}")
+        print(f"Error calling Gemini API for dream {dream_id}: {e}")
+        # Log the full traceback if needed for debugging
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to enhance dream with AI: {e}")
 
-    # 4. Return the enhanced text along with original dream details
-    return {
-        "id": db_dream.id,
-        "excerpt": enhanced_text, # This is the enhanced text
-        "symbols": db_dream.symbols.split(",") if db_dream.symbols else [],
-        "emotions": db_dream.emotions.split(",") if db_dream.emotions else [],
-        "created_at": db_dream.created_at,
-    }
+# If you have other endpoints, keep them below
