@@ -1,0 +1,45 @@
+# Node.js / Frontend (Vite/React)
+node_modules/
+dist/                     # Vite build output
+.vite/                    # Vite cache directory
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json         # Optional: Keep if you want to ensure consistent installs, ignore if you only rely on package.json
+pnpm-lock.yaml            # pnpm lock file
+.env                      # Local environment variables for frontend (e.g., VITE_API_URL)
+.env.*local               # Vite-specific local environment variables (e.g., .env.development.local)
+
+
+# Python / Backend (FastAPI)
+__pycache__/              # Python compiled files
+*.pyc
+*.egg-info/
+.pytest_cache/            # pytest cache directory
+venv/                     # Python virtual environment (if located inside a project folder)
+.venv/                    # Alternative common name for virtual environment
+.env                      # Local environment variables for backend (e.g., GOOGLE_API_KEY)
+pip-log.txt
+pip-delete-this-directory.txt
+.Python                   # Windows Python Launcher cache
+.ipynb_checkpoints/       # Jupyter notebooks checkpoints (if used)
+*.sqlite3                 # SQLite database files (if you're using SQLite)
+
+
+# Operating System Files
+.DS_Store                 # macOS specific
+Thumbs.db                 # Windows specific
+
+# IDE Specific (VS Code)
+.vscode/                  # Uncomment this line to ignore all VS Code settings.
+# If you want to keep specific VS Code settings in git,
+# comment out the line above and uncomment/add specific files below:
+# .vscode/settings.json
+# .vscode/tasks.json
+# .vscode/launch.json
+# .vscode/extensions.json
+# .vscode/*.code-workspace
+
+# Logs and miscellaneous
+*.log
+.DS_Store
